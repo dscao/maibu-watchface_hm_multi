@@ -312,25 +312,25 @@ void app_ble_change()
 	LayerBitmap layer_bitmap_ble_discon = { bitmap_ble_discon,frame_ble,GAlignCenter };
 	enum BleStatus ble_sta;
 	ble_sta = maibu_get_ble_status();
-	if (ble_sta = BLE_STATUS_CLOSE) {
-		if (g_official_bledis != 0)
+	if (ble_sta != BLE_STATUS_CONNECTED && ble_sta != BLE_STATUS_USING) {
+		if (g_official_bledis == 0)
 		{
 		P_Layer layer_ble_new = app_layer_create_bitmap(&layer_bitmap_ble_discon);
 		app_layer_set_bg_color(layer_ble_new, GColorBlack);
 		g_app_mwd_ble_layer_id = app_window_replace_layer(p_window, p_ble_layer, layer_ble_new);
 		app_window_update(p_window);
-		g_official_bledis = 0;
+		g_official_bledis = 1;
 		maibu_service_vibes_pulse(VibesPulseTypeShort,1);
 		}
 	}
 	else if (ble_sta = BLE_STATUS_CONNECTED) {
-		if (g_official_bledis != 1)
+		if (g_official_bledis == 1)
 		{
 		P_Layer layer_ble_new = app_layer_create_bitmap(&layer_bitmap_ble_con);
 		app_layer_set_bg_color(layer_ble_new, GColorBlack);
 		g_app_mwd_ble_layer_id = app_window_replace_layer(p_window, p_ble_layer, layer_ble_new);
 		app_window_update(p_window);
-		g_official_bledis = 1;
+		g_official_bledis = 0;
 		}
 	}
 	
