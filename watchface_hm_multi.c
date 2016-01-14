@@ -1,33 +1,18 @@
-/*
- * =====================================================================================
- * 
+/* 
+* =====================================================================================
  *    Corporation:  dscao(大胜). All Rights Reserved.
  *       Filename:  Multi_watchface.c
  *         Author:  dscao , dscao.com@gmail.com
- *        Created:  2016年1月8日 01时20分30秒
- * 
- *    Description:  
- *
- * =====================================================================================
- *
- * =====================================================================================
- * 
- *   MODIFICATION HISTORY :
- *    
- *		     DATE :
- *		     DESC :
+ *        Created:  2016年1月14日 23时15分30秒
+ *    Description:  加入农历显示，含2016-2020年节气，蓝牙2秒判断一次，断开3次长振动。
  * =====================================================================================
  */	
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-
 #include "maibu_sdk.h"
 #include "maibu_res.h"
-
-
-
 
 /*窗口ID, 通过该窗口ID获取窗口句柄*/
 static int32_t g_app_mwd_window_id = -1;
@@ -35,6 +20,8 @@ static int32_t g_app_mwd_window_id = -1;
 /*小时分钟图层ID，通过该图层ID获取图层句柄*/
 static int16_t g_app_mwd_hm_layer_id = -1;
 static int16_t g_app_mwd_week_layer_id = -1;
+static int16_t g_app_mwd_nlday_layer_id = -1;
+static int16_t g_app_mwd_jqday_layer_id = -1;
 static int16_t g_app_mwd_day_layer_id = -1;
 static int16_t g_app_mwd_ble_layer_id = -1;
 static int16_t g_app_mwd_pressure_layer_id = -1;
@@ -47,18 +34,12 @@ static int8_t g_app_mwd_temperature_layer_id = -1;
 
 static uint8_t app_timer_change_id = -1;
 
-/*定时器状态static int accel_event = 0;*/
-static	int accel_event = 0;
-static	int accel_show = 0;
-
 /*背景图片图层位置*/
 
 #define MWD_BG_ORIGIN_X		0
 #define MWD_BG_ORIGIN_Y		0	
 #define MWD_BG_SIZE_H		128
 #define MWD_BG_SIZE_W		128
-
-
 
 /*显示小时分钟文本图层*/
 #define MWD_HM_ORIGIN_X 		2
@@ -69,8 +50,20 @@ static	int accel_show = 0;
 /*显示星期文本图层*/
 #define MWD_WEEK_ORIGIN_X		2
 #define MWD_WEEK_ORIGIN_Y		52	
-#define MWD_WEEK_SIZE_H		18
+#define MWD_WEEK_SIZE_H		16
 #define MWD_WEEK_SIZE_W		124
+
+/*显示农历文本图层*/
+#define MWD_day_ORIGIN_X		2
+#define MWD_day_ORIGIN_Y		70	
+#define MWD_day_SIZE_H		14
+#define MWD_day_SIZE_W		124
+
+/*显示农历节气图层*/
+#define MWD_JQDAY_ORIGIN_X		2
+#define MWD_JQDAY_ORIGIN_Y		84	
+#define MWD_JQDAY_SIZE_H		14
+#define MWD_JQDAY_SIZE_W		124
 
 /*蓝牙图层位置*/
 #define MWD_BLE_ORIGIN_X		4
@@ -114,29 +107,17 @@ static	int accel_show = 0;
 #define MWD_CLIMB_SIZE_H		10
 #define MWD_CLIMB_SIZE_W		40
 
-/*天气图标图层位置*/
-#define MWD_TQTB_ORIGIN_X		10
-#define MWD_TQTB_ORIGIN_Y		76	
-#define MWD_TQTB_SIZE_H		30
-#define MWD_TQTB_SIZE_W		30
-
-/*天气温度图层位置*/
-#define MWD_TQWD_ORIGIN_X		70
-#define MWD_TQWD_ORIGIN_Y		76	
-#define MWD_TQWD_SIZE_H		30
-#define MWD_TQWD_SIZE_W		40
-
 /*实测手表温度图层位置*/
 #define MWD_TEMPERATURE_ORIGIN_X		2
-#define MWD_TEMPERATURE_ORIGIN_Y		78	
-#define MWD_TEMPERATURE_SIZE_H		34
+#define MWD_TEMPERATURE_ORIGIN_Y		100	
+#define MWD_TEMPERATURE_SIZE_H		14
 #define MWD_TEMPERATURE_SIZE_W		124
 
 /*声明自定义函数*/
 
 int diday(int year, int month, int day);
 int diweek(int didays,int weekday) ;
-
+char *GetDayOf(int year, int month,int day, int type);
 
 /*年*/
 int16_t g_official_year = -1;
@@ -188,6 +169,17 @@ void app_mwd_watch_update()
 		{
 			return;
 		}
+		P_Layer p_day_layer = app_window_get_layer_by_id(p_window, g_app_mwd_day_layer_id);
+		if (NULL == p_day_layer)
+		{
+			return;
+		}
+		
+		P_Layer p_jqday_layer = app_window_get_layer_by_id(p_window, g_app_mwd_jqday_layer_id);
+		if (NULL == p_jqday_layer)
+		{
+			return;
+		}
 		
 		P_Layer p_days_layer = app_window_get_layer_by_id(p_window, g_app_mwd_days_layer_id);
 		if (NULL == p_days_layer)
@@ -231,22 +223,20 @@ void app_mwd_watch_update()
 	{
 		memset(str, 0, sizeof(str));
 		char wday[7][8]={"周日","周一","周二","周三","周四","周五","周六"}; 
-		sprintf(str, "%s  %d/%d/%d", wday[datetime.wday], datetime.year, datetime.mon, datetime.mday);
+		sprintf(str, "%s  %d/%02d/%02d", wday[datetime.wday], datetime.year, datetime.mon, datetime.mday);
 		app_layer_set_text_text(p_week_layer, str);
 		
 		sprintf(str, "%d天", diday(datetime.year,datetime.mon,datetime.mday));
 		app_layer_set_text_text(p_days_layer, str);
 		sprintf(str, "%d周", diweek(diday(datetime.year,datetime.mon,datetime.mday),datetime.wday));
 		app_layer_set_text_text(p_weeks_layer, str);
+		app_layer_set_text_text(p_day_layer, GetDayOf(datetime.year,datetime.mon,datetime.mday,0));
+		app_layer_set_text_text(p_jqday_layer, GetDayOf(datetime.year,datetime.mon,datetime.mday,1));
 		
 		g_official_year = datetime.year;
 		g_official_month = datetime.mon;
 		g_official_day = datetime.mday;
-	}			
-		
-						
-		
-		
+	}	
 		
 		/*电量状态*/
 		int8_t percent;
@@ -274,17 +264,11 @@ void app_mwd_watch_update()
 		/*更新温度*/
 		float temp;
 		if (0 == maibu_get_temperature(&temp))
-		{sprintf(buf, "内部温度：%0.1f 度", temp);
+		{sprintf(buf, "体感温度：%0.1f 度", temp);
 
 			app_layer_set_text_text(p_temperature_layer, buf);	
-		}
-		
-		
-		
-	
-		
-	app_window_update(p_window);
-	
+		}		
+	app_window_update(p_window);	
 }
 
 void app_ble_change()
@@ -300,7 +284,6 @@ void app_ble_change()
 	{
 		return;
 	}
-
 	
 	/*蓝牙状态更改*/
 	GBitmap bitmap_ble_con;
@@ -320,7 +303,7 @@ void app_ble_change()
 		g_app_mwd_ble_layer_id = app_window_replace_layer(p_window, p_ble_layer, layer_ble_new);
 		app_window_update(p_window);
 		g_official_bledis = 1;
-		maibu_service_vibes_pulse(VibesPulseTypeShort,1);
+		maibu_service_vibes_pulse(VibesPulseTypeLong,3);
 		}
 	}
 	else if (ble_sta = BLE_STATUS_CONNECTED) {
@@ -388,7 +371,7 @@ P_Window init_mwd_window()
 	char week_str[20] = "";
 	memset(week_str, 0, sizeof(week_str));
 	char wday[7][8]={"周日","周一","周二","周三","周四","周五","周六"}; 
-	sprintf(week_str, "%s  %d/%d/%d", wday[t.wday], t.year, t.mon, t.mday);
+	sprintf(week_str, "%s  %d/%02d/%02d", wday[t.wday], t.year, t.mon, t.mday);
 	LayerText lt_week = {week_str, frame_week, GAlignCenter, U_GBK_SIMSUN_14, 0};
 	P_Layer layer_text_week = app_layer_create_text(&lt_week);
 	if(layer_text_week != NULL)
@@ -396,6 +379,7 @@ P_Window init_mwd_window()
 		app_layer_set_bg_color(layer_text_week, GColorBlack);	
 		g_app_mwd_week_layer_id = app_window_add_layer(p_window, layer_text_week);
 	}
+	
 	/*添加周图层*/
 	GRect frame_weeks = {{MWD_WEEKS_ORIGIN_X, MWD_WEEKS_ORIGIN_Y}, {MWD_WEEKS_SIZE_H, MWD_WEEKS_SIZE_W}};
 	char weeks_str[6] = "";
@@ -418,6 +402,25 @@ P_Window init_mwd_window()
 		app_layer_set_bg_color(layer_text_days, GColorBlack);
 		g_app_mwd_days_layer_id = app_window_add_layer(p_window, layer_text_days);
 	}	
+	
+	/*添加农历图层*/
+	GRect frame_day = {{MWD_day_ORIGIN_X, MWD_day_ORIGIN_Y}, {MWD_day_SIZE_H, MWD_day_SIZE_W}};
+	LayerText lt_day = { GetDayOf(t.year, t.mon,t.mday,0), frame_day, GAlignCenter, U_GBK_SIMSUN_12, 0};
+	P_Layer layer_text_day = app_layer_create_text(&lt_day);
+	if(layer_text_day != NULL)
+	{
+		app_layer_set_bg_color(layer_text_day, GColorBlack);	
+		g_app_mwd_day_layer_id = app_window_add_layer(p_window, layer_text_day);
+	}
+	/*添加节气图层*/
+	GRect frame_jqday = {{MWD_JQDAY_ORIGIN_X, MWD_JQDAY_ORIGIN_Y}, {MWD_JQDAY_SIZE_H, MWD_JQDAY_SIZE_W}};
+	LayerText lt_jqday = { GetDayOf(t.year, t.mon,t.mday,1), frame_jqday, GAlignCenter, U_GBK_SIMSUN_12, 0};
+	P_Layer layer_text_jqday = app_layer_create_text(&lt_jqday);
+	if(layer_text_jqday != NULL)
+	{
+		app_layer_set_bg_color(layer_text_jqday, GColorBlack);	
+		g_app_mwd_jqday_layer_id = app_window_add_layer(p_window, layer_text_jqday);
+	}
 	
 	
 	/*添加电量数据图层显示电量百分比*/
@@ -476,7 +479,7 @@ P_Window init_mwd_window()
 	float temp;
 	if (0 == maibu_get_temperature(&temp))
 	{
-	sprintf(buf, "内部温度：检测中.", temp);
+	sprintf(buf, "温度：检测中.", temp);
 	LayerText layer_text_temperature = {buf, frame_temperature, GAlignCenter,  U_GBK_SIMSUN_12, 0};
 	P_Layer layer_temperature = app_layer_create_text(&layer_text_temperature);
 	if(layer_temperature != NULL)
@@ -497,8 +500,8 @@ P_Window init_mwd_window()
 		app_layer_set_bg_color(layer_ble, GColorBlack);
 		g_app_mwd_ble_layer_id = app_window_add_layer(p_window, layer_ble);
 	}	
+
 	g_official_bledis = 0;
-	
 	
 	
 	/*注册一个事件通知回调，当有时间改变时，立即更新时间*/
@@ -513,43 +516,9 @@ P_Window init_mwd_window()
 int diday(int year, int month, int day) 
 {
 	int sum,leap;
-	if (month== 1){
-	sum=0;
-	}
-	if (month== 2){
-	sum=33;
-	}
-	if (month== 3){
-	sum=59;
-	}
-	if (month== 4){
-	sum=90;
-	}
-	if (month== 5){
-	sum=120;
-	}
-	if (month== 6){
-	sum=151;
-	}
-	if (month== 7){
-	sum=181;
-	}
-	if (month== 8){
-	sum=212;
-	}
-	if (month== 9){
-	sum=243;
-	}
-	if (month== 10){
-	sum=273;
-	}
-	if (month== 11){
-	sum=304;
-	}
-	if (month== 12){
-	sum=334;
-	}
-	sum=sum+day; /*再加上某天的天数*/
+	 /*公历每月前面的天数*/
+	int MonthAdd[12] = {0,31,59,90,120,151,181,212,243,273,304,334};	
+	sum=MonthAdd[month-1]+day; /*再加上某天的天数*/ 
 	if(year%400==0||(year%4==0&&year%100!=0)) {/*判断是不是闰年*/
 	leap=1;
 	}
@@ -558,8 +527,7 @@ int diday(int year, int month, int day)
 	}
 	if(leap==1&&month>2){/*如果是闰年且月份大于2,总天数应该加一天*/
 	sum=sum+1;
-	}
-	
+	}	
 	return sum;
 }
 
@@ -576,10 +544,16 @@ int diweek(int didays,int weekday)
 	return dizous;
 }
 
+/*------------农历转换函数-----------*/
+char *GetDayOf(int year, int month,int day, int type)
+{ 
+ 
+	
+} 
 
 int main()
 {
-/*simulator_init();*/
+simulator_init();
 	/*创建显示时间窗口*/
 	P_Window p_window = init_mwd_window();
 	if (p_window != NULL)
@@ -588,8 +562,8 @@ int main()
 		g_app_mwd_window_id = app_window_stack_push(p_window);
 		app_mwd_watch_update();
 	}	
-	/*每2秒刷新*/
-	app_timer_change_id = app_service_timer_subscribe(1000*2, app_ble_change, NULL);
-/*simulator_wait();*/
+	/*每2000毫米刷新*/
+	app_timer_change_id = app_service_timer_subscribe(2000, app_ble_change, NULL);
+simulator_wait();
 
 }
